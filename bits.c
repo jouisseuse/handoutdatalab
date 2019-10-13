@@ -143,7 +143,7 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return ~(~(x&~y)&~(~x&y));
+  return (~(x&y)&(~(~x&~y)));
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -164,7 +164,7 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return ((!((~x) << 1)) & (!(x >> 31)));
+  return !((x+x+2) | !(~x));
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -175,9 +175,10 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-    unsigned int z = 0x55;
-    unsigned int y = z+(z<<8)+(z<<16)+(z<<24);
-    return !(~(x|y));
+    int z = 0x55;
+    int y = z+(z<<8);
+     z=y+(y<<16);
+    return !(~(x|z));
 }
 /* 
  * negate - return -x 
@@ -200,7 +201,8 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-    return (!((x+(~48)+1)>>31)) & ((x+(~58)+1)>>31);
+int y=(48+(~x))& (x+(~0x39));
+    return y>>31 & 0x1;
 }
 /* 
  * conditional - same as x ? y : z 
@@ -210,8 +212,8 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-    int a = ~(!!x)+1;
-  return (y & a) | (z & ~a);
+    int a = ~(!x)+1;
+  return (y & ~a) | (z & a);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -221,10 +223,10 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-    int flag1 = (y+1+(~x)) >> 31;
-    int flag2 = (x >> 31) & 1;
-    int flag3 = (y >> 31) & 1;
-  return ((flag2^flag3) & flag2) | (!flag1 & !(flag2^flag3));
+    int flag1 = (y+1+(~x))>>31;
+    int flag2 = x >> 31;
+    int flag3 = ((y >> 31)^flag2) &1;
+  return (flag3 & flag2) | (!flag1 & !flag3);
 }
 //4
 /* 
@@ -236,7 +238,7 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return ((~(x^(~x+1))) >> 31) & (~x)>>31 & 1;
+   return (~(x |(~x+1))>>31)&0x1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -251,26 +253,19 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-    int a= ~(!!(x>>31))+1;
-    x= (~x & a) | (x & ~a);
-    int flag1,flag2,flag3,flag4,flag5,n1,n2,n3,n4,n5,n6,num;
-    flag1=~(!!(x>>16))+1;
-    n1=16&flag1;
-    x >>= n1;
-    flag2=~(!!(x>>8))+1;
-    n2=8&flag2;
-    x >>= n2;
-    flag3=~(!!(x>>4))+1;
-    n3=4&flag3;
-    x >>= n3;
-    flag4=~(!!(x>>2))+1;
-    n4=2&flag4;
-    x >>= n4;
-    flag5=~(!!(x>>1))+1;
-    n5=1&flag5;
-    x >>= n5;
-    n6=!!x;
-    num=n1+n2+n3+n4+n5+n6+1;
+    int flag1,flag2,flag3,flag4,flag5,num;
+    x=x^(x>>31);
+    flag1=(!!(x>>16))<<4;
+    x >>= flag1;
+    flag2=(!!(x>>8))<<3;
+    x >>= flag2;
+    flag3=(!!(x>>4))<<2;
+    x >>= flag3;
+    flag4=(!!(x>>2))<<1;
+    x >>= flag4;
+    flag5=!!(x>>1);
+    x >>= flag5;
+    num=flag1+flag2+flag3+flag4+flag5+!!x+1;
   return num;
 }
 //float
@@ -288,18 +283,17 @@ int howManyBits(int x) {
 
 
 unsigned floatScale2(unsigned uf) {
-    unsigned s = uf>>31;
-    unsigned exp = uf>>23 & 255;
-    unsigned flag = 0x7fffff;//255+(255<<8)+(127<<16);
-    unsigned frac = uf & flag;
-    if (exp == 255) return uf;
+    unsigned s = uf & 0x80000000;
+    unsigned exp = uf & 0x7f800000; 
+    unsigned frac = uf & 0x7fffff;//255+(255<<8)+(127<<16)
+    if (exp == 0x7f800000) return uf;
     if (exp == 0){
-        if (frac>>22) exp++;
+        if (frac>>22) exp+=0x800000;
         frac=frac<<1;
     }
-    else exp++;
-    if(exp==255) frac=0;
-    return (s<<31)|(exp<<23)|frac;
+    else exp+=0x800000;
+   //if(exp==255) frac=0;
+    return s|exp|frac;
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -316,17 +310,16 @@ unsigned floatScale2(unsigned uf) {
 int floatFloat2Int(unsigned uf) {
     unsigned s = uf>>31;
     unsigned exp = uf>>23 & 255;
-    unsigned flag = 0x7fffff;//255+(255<<8)+(127<<16);
-    unsigned frac = uf & flag;
+    unsigned frac = uf & 0x7fffff;//255+(255<<8)+(127<<16)
     int x;
     if (exp<127) return 0;
-    else {if (exp>157) return 0x80000000;
-    else exp=exp-127;
-        if (exp<=23) x=(1<<exp)|(frac>>(23-exp));
-        else return x=(1<<exp)|(frac>>(exp-23));
-        if (!s) return x;
-        else return ~x+1;
-             }
+    if (exp>157) return 0x80000000;
+         exp=exp-127;
+        //if (exp<=23) 
+         x=(1<<exp)|(frac>>(23-exp));
+       //else return x=(1<<exp)|(frac>>(exp-23));
+        if (s) return ~x+1;
+        else return x;
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
